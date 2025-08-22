@@ -13,6 +13,7 @@
   "scripts": {
     "deploy": "npm run build && wrangler pages deploy",
     "build": "remix vite:build",
+    "build:ci": "cross-env REMIX_PLATFORM=node VITE_DISABLE_CF=1 BOLT_DISABLE_CF=1 vite build --sourcemap false"
     "dev": "node pre-start.cjs  && remix vite:dev",
     "test": "vitest --run",
     "test:watch": "vitest",
