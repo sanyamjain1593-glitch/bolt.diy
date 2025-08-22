@@ -29,7 +29,7 @@ jobs:
         run: pnpm install --frozen-lockfile=false
 
       - name: Build (Vite)
-        run: pnpm vite build --sourcemap false
+        run: pnpm run build:ci
 
       - name: Publish build/client to web-dist branch
         uses: peaceiris/actions-gh-pages@v3
