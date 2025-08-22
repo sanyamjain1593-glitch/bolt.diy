@@ -1,0 +1,40 @@
+name: Build static site to 'web-dist' branch
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # allow pushing to the repo
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node 20.18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.18.0'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Build (Vite)
+        run: pnpm vite build --sourcemap false
+
+      - name: Publish build/client to web-dist branch
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: build/client
+          publish_branch: web-dist
+          force_orphan: true
