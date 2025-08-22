@@ -1,95 +1,34 @@
-ARG BASE=node:20.18.0
-FROM ${BASE} AS base
-
+# ---- Build stage ----
+FROM node:20-alpine AS build
 WORKDIR /app
 
-# Install dependencies (this step is cached as long as the dependencies don't change)
-COPY package.json pnpm-lock.yaml ./
+# Install pnpm
+RUN npm i -g pnpm
 
-#RUN npm install -g corepack@latest
+# Install deps
+COPY package.json pnpm-lock.yaml* ./
+RUN pnpm install --frozen-lockfile=false
 
-#RUN corepack enable pnpm && pnpm install
-RUN npm install -g pnpm && pnpm install
-
-# Copy the rest of your app's source code
+# Copy source and build
 COPY . .
+RUN pnpm vite build --sourcemap false
 
-# Expose the port the app runs on
-EXPOSE 5173
+# ---- Runtime stage ----
+FROM nginx:1.25-alpine
 
-# Production image
-FROM base AS bolt-ai-production
+# Static files
+WORKDIR /usr/share/nginx/html
+COPY --from=build /app/build/client ./
 
-# Define environment variables with default values or let them be overridden
-ARG GROQ_API_KEY
-ARG HuggingFace_API_KEY
-ARG OPENAI_API_KEY
-ARG ANTHROPIC_API_KEY
-ARG OPEN_ROUTER_API_KEY
-ARG GOOGLE_GENERATIVE_AI_API_KEY
-ARG OLLAMA_API_BASE_URL
-ARG XAI_API_KEY
-ARG TOGETHER_API_KEY
-ARG TOGETHER_API_BASE_URL
-ARG AWS_BEDROCK_CONFIG
-ARG VITE_LOG_LEVEL=debug
-ARG DEFAULT_NUM_CTX
+# Nginx template that reads $PORT and injects COOP/COEP headers
+COPY nginx.template /etc/nginx/templates/default.conf.template
 
-ENV WRANGLER_SEND_METRICS=false \
-    GROQ_API_KEY=${GROQ_API_KEY} \
-    HuggingFace_KEY=${HuggingFace_API_KEY} \
-    OPENAI_API_KEY=${OPENAI_API_KEY} \
-    ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY} \
-    OPEN_ROUTER_API_KEY=${OPEN_ROUTER_API_KEY} \
-    GOOGLE_GENERATIVE_AI_API_KEY=${GOOGLE_GENERATIVE_AI_API_KEY} \
-    OLLAMA_API_BASE_URL=${OLLAMA_API_BASE_URL} \
-    XAI_API_KEY=${XAI_API_KEY} \
-    TOGETHER_API_KEY=${TOGETHER_API_KEY} \
-    TOGETHER_API_BASE_URL=${TOGETHER_API_BASE_URL} \
-    AWS_BEDROCK_CONFIG=${AWS_BEDROCK_CONFIG} \
-    VITE_LOG_LEVEL=${VITE_LOG_LEVEL} \
-    DEFAULT_NUM_CTX=${DEFAULT_NUM_CTX}\
-    RUNNING_IN_DOCKER=true
+# Tell nginx entrypoint where templates live (it will envsubst $PORT on startup)
+ENV NGINX_ENVSUBST_TEMPLATE_DIR=/etc/nginx/templates
+ENV NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx/conf.d
 
-# Pre-configure wrangler to disable metrics
-RUN mkdir -p /root/.config/.wrangler && \
-    echo '{"enabled":false}' > /root/.config/.wrangler/metrics.json
+# Expose a default port (Render will still inject $PORT)
+EXPOSE 8080
 
-RUN pnpm run build
-
-CMD [ "pnpm", "run", "dockerstart"]
-
-# Development image
-FROM base AS bolt-ai-development
-
-# Define the same environment variables for development
-ARG GROQ_API_KEY
-ARG HuggingFace 
-ARG OPENAI_API_KEY
-ARG ANTHROPIC_API_KEY
-ARG OPEN_ROUTER_API_KEY
-ARG GOOGLE_GENERATIVE_AI_API_KEY
-ARG OLLAMA_API_BASE_URL
-ARG XAI_API_KEY
-ARG TOGETHER_API_KEY
-ARG TOGETHER_API_BASE_URL
-ARG VITE_LOG_LEVEL=debug
-ARG DEFAULT_NUM_CTX
-
-ENV GROQ_API_KEY=${GROQ_API_KEY} \
-    HuggingFace_API_KEY=${HuggingFace_API_KEY} \
-    OPENAI_API_KEY=${OPENAI_API_KEY} \
-    ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY} \
-    OPEN_ROUTER_API_KEY=${OPEN_ROUTER_API_KEY} \
-    GOOGLE_GENERATIVE_AI_API_KEY=${GOOGLE_GENERATIVE_AI_API_KEY} \
-    OLLAMA_API_BASE_URL=${OLLAMA_API_BASE_URL} \
-    XAI_API_KEY=${XAI_API_KEY} \
-    TOGETHER_API_KEY=${TOGETHER_API_KEY} \
-    TOGETHER_API_BASE_URL=${TOGETHER_API_BASE_URL} \
-    AWS_BEDROCK_CONFIG=${AWS_BEDROCK_CONFIG} \
-    VITE_LOG_LEVEL=${VITE_LOG_LEVEL} \
-    DEFAULT_NUM_CTX=${DEFAULT_NUM_CTX}\
-    RUNNING_IN_DOCKER=true
-
-RUN mkdir -p ${WORKDIR}/run
-CMD pnpm run dev --host
+# Start nginx (entrypoint will render the template and run nginx)
+CMD ["/docker-entrypoint.sh", "nginx", "-g", "daemon off;"]
