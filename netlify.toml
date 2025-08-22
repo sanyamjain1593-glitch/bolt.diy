@@ -1,0 +1,18 @@
+[build]
+  command = "npm i -g pnpm && pnpm install --frozen-lockfile=false && pnpm vite build --sourcemap false"
+  publish = "build/client"
+
+[build.environment]
+  NODE_VERSION = "20.18.0"
+  NODE_OPTIONS = "--max-old-space-size=4096"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cross-Origin-Opener-Policy = "same-origin"
+    Cross-Origin-Embedder-Policy = "require-corp"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
